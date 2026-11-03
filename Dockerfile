@@ -1,22 +1,28 @@
-# Use the official Node.js image as the base
-FROM node:18
+# syntax=docker/dockerfile:1
 
-# Set the working directory inside the container
-WORKDIR /MicroLearning
+FROM node:20-bookworm-slim AS base
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends openssl ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
 
-# Copy package.json and package-lock.json to the container
+# --- Install production dependencies and generate the Prisma client --------
+FROM base AS deps
 COPY package*.json ./
+COPY src/prisma ./src/prisma
+RUN npm ci --omit=dev --ignore-scripts \
+  && npx --yes prisma@5.22.0 generate
 
-# Install application dependencies
-RUN npm install apt-get install -y postgresql
-
-# Copy the rest of the application code to the container
-COPY . .
-
-# Expose the port your application listens on
-EXPOSE 3000 
-EXPOSE 5432
-
-# Define the command to run your application
-CMD npx prisma generate --schema=./src/prisma/schema.prisma && npx prisma migrate dev --schema=./src/prisma/schema.prisma && node ./src/index.js 
-
+# --- Runtime image ---------------------------------------------------------
+FROM base AS runtime
+ENV NODE_ENV=production
+COPY --from=deps /app/node_modules ./node_modules
+COPY package*.json ./
+COPY src ./src
+RUN mkdir -p src/media && chown -R node:node src/media
+USER node
+EXPOSE 3000
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+  CMD node -e "fetch('http://localhost:'+(process.env.PORT||3000)+'/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+# Apply pending migrations, then start the API.
+CMD ["sh", "-c", "npx --yes prisma@5.22.0 migrate deploy && node src/index.js"]

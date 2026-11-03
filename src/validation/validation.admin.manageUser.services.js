@@ -1,78 +1,36 @@
-/* eslint-disable linebreak-style */
 const joi = require("joi");
+const c = require("./common");
 
-const read = {
-  params: joi.object().keys({
-    phone: joi
-      .string()
-      .length(11)
-      .regex(/^09\d{9}$/)
-      .required(),
-  }),
+const phoneParams = joi.object().keys({ phone: c.phone.required() });
+
+const profile = {
+  firstName: c.personName,
+  lastName: c.personName,
+  countryCode: joi.string().trim().max(5),
+  address: joi.string().trim().max(500),
+  blocked: joi.bool(),
 };
-const getAll = {
-  query: joi.object().keys({
-    size: joi.number().required(),
-    page: joi.number().required(),
-  }),
-};
+
+const getAll = { query: c.pagination };
+
+const read = { params: phoneParams };
+
 const create = {
   body: joi.object().keys({
-    firstName: joi.string().optional(),
-    lastName: joi.string().optional(),
-    phone: joi
-      .string()
-      .length(11)
-      .regex(/^09\d{9}$/)
-      .required(),
-    password: joi
-      .string()
-      .regex(/^[a-zA-Z0-9- ]{8,16}$/)
-      .required(),
-    blocked: joi.bool().optional(),
-    softDelete: joi.bool().optional(),
-    countryCode: joi.string().optional(),
-    addresses: joi.array().items(
-      joi.object({
-        province: joi.string().optional(),
-        city: joi.string().optional(),
-        address: joi.string().optional(),
-      }).optional
-    ),
+    ...profile,
+    phone: c.phone.required(),
+    password: c.newPassword.required(),
   }),
 };
 
 const update = {
-  params: joi.object().keys({
-    phone: joi
-      .string()
-      .length(11)
-      .regex(/^09\d{9}$/)
-      .required(),
-  }),
-  body: joi.object().keys({
-    firstName: joi.string().optional(),
-    lastName: joi.string().optional(),
-    password: joi
-      .string()
-      .regex(/^[a-zA-Z0-9- ]{8,16}$/)
-      .optional(),
-    blocked: joi.bool().optional(),
-    softDelete: joi.bool().optional(),
-    countryCode: joi.string().optional(),
-    addresses: joi.array().items(
-      joi.object({
-        province: joi.string().optional(),
-        city: joi.string().optional(),
-        address: joi.string().optional(),
-      }).optional
-    ),
-  }),
+  params: phoneParams,
+  body: joi
+    .object()
+    .keys({ ...profile, password: c.newPassword })
+    .min(1),
 };
 
-module.exports = {
-  read,
-  create,
-  update,
-  getAll,
-};
+const remove = { params: phoneParams };
+
+module.exports = { getAll, read, create, update, remove };

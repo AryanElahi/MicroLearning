@@ -1,34 +1,31 @@
-version: "3"
-
 services:
   app:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    build: .
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@db:5432/${POSTGRES_DB:-microlearning}?schema=public
     ports:
-      - "3000:3000"
-    environment:
-      - DATABASE_URL=postgresql://postgres:12345@db:5432/mydb?schema=public
+      - "${PORT:-3000}:3000"
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     volumes:
-      - ./microImages:/MicroLearning/src/media
-      - ./app:/app
-    networks:
-      - app_network
+      - ./microImages:/app/src/media
+    restart: unless-stopped
+
   db:
-    image: postgres:15
+    image: postgres:15-alpine
     environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=12345
-      - POSTGRES_DB=mydb
-    networks:
-      - app_network
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-microlearning}
     volumes:
       - ./microlearning-postgres/data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
-
-networks:
-   app_network:
-    name: network-np
+    healthcheck:
+      test:
+        ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-microlearning}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped

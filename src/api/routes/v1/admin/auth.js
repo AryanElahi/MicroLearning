@@ -1,92 +1,51 @@
-/* eslint-disable linebreak-style */
 const express = require("express");
-
-const {
-  signup,
-  login,
-  refreshToken,
-  logout,
-  checkRefreshToken,
-} = require("../../../../services/admin.services");
+const config = require("../../../../config");
+const { isAuth, validate } = require("../../../middlewares");
+const { authLimiter } = require("../../../middlewares/rateLimit.middleware");
+const schema = require("../../../../validation/validation.admin.auth.services");
+const adminService = require("../../../../services/admin.services");
+const { toResponse } = require("../../../../services/token.services");
+const asyncHandler = require("../../../../utils/asyncHandler");
+const ApiError = require("../../../../utils/ApiError");
 
 const router = express.Router();
-const adminAuthValidationSchema = require("../../../../validation/validation.admin.auth.services");
-const { ApiError } = require("../../../middlewares/errorHandling.middleware");
-const { isAuth } = require("../../../middlewares/isAuth.middleware");
-const validate = require("../../../middlewares/validate.middleware");
 
-require("dotenv").config();
-
+// Open sign-up is a development convenience only. In production create the
+// first admin with `npm run seed:admin` and the rest through /manageAdmin.
 router.post(
   "/signup",
-  validate(adminAuthValidationSchema.signup),
-  async (req, res, next) => {
-    if (process.env.ENVIRONMENT == "development")
-      try {
-        const { userName, password, role } = req.body;
-        const resault = await signup(userName, password, role);
-        return res.send({
-          Refresh_Token: resault.refreshtoken,
-          Access_Token: resault.accesstoken,
-        });
-      } catch (error) {
-        return next(new ApiError(error.statusCode, error.message));
-      }
-  }
+  (req, res, next) => (config.isProduction ? next(ApiError.notFound("Route not found")) : next()),
+  validate(schema.signup),
+  asyncHandler(async (req, res) => {
+    res.status(201).json(toResponse(await adminService.signup(req.body)));
+  })
 );
+
 router.post(
   "/login",
-  validate(adminAuthValidationSchema.login),
-  async (req, res, next) => {
-    try {
-      const { userName, password } = req.body;
-      const resault = await login(userName, password);
-      return res.send({
-        Refresh_Token: resault.refreshtoken,
-        Access_Token: resault.accesstoken,
-      });
-    } catch (error) {
-      return next(new ApiError(error.statusCode, error.message));
-    }
-  }
+  authLimiter,
+  validate(schema.login),
+  asyncHandler(async (req, res) => {
+    const { userName, password } = req.body;
+    res.json(toResponse(await adminService.login(userName, password)));
+  })
 );
+
 router.post(
   "/refreshToken",
-  isAuth,
-  validate(adminAuthValidationSchema.refreshToken),
-  async (req, res, next) => {
-    try {
-      const { RefreshToken } = req.body;
-      console.log(RefreshToken);
-      const adminId = await checkRefreshToken(receivedRefreshToken);
-      console.log(adminId);
-      if (adminId) {
-        const resault = await refreshToken(adminId);
-        return res.send({
-          Refresh_Token: resault.refreshtoken,
-          Access_Token: resault.accesstoken,
-        });
-      }
-      return next(new ApiError(412, "access denied! refresh token not valid"));
-    } catch (error) {
-      return next(new ApiError(error.statusCode, error.message));
-    }
-  }
+  validate(schema.refreshToken),
+  asyncHandler(async (req, res) => {
+    res.json(toResponse(await adminService.refresh(req.body.RefreshToken)));
+  })
 );
 
 router.post(
   "/logout",
   isAuth,
-  //validate(adminAuthValidationSchema.logout),
-  async (req, res, next) => {
-    try {
-      const id = req.client.id;
-      const resault = await logout(id);
-      return res.send();
-    } catch (error) {
-      return next(new ApiError(error.statusCode, error.message));
-    }
-  }
+  asyncHandler(async (req, res) => {
+    if (req.auth.type === "admin") await adminService.logout(req.auth.id);
+    res.status(204).end();
+  })
 );
 
 module.exports = router;

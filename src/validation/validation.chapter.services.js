@@ -1,38 +1,17 @@
-/* eslint-disable no-dupe-keys */
-const { number } = require("joi");
 const joi = require("joi");
+const c = require("./common");
 
-const read = {
-  params: joi.object().keys({
-    id: joi.number().required(),
-  }),
-};
-const create = {
-  body: joi.object().keys({
-    title: joi
-      .string()
-      .regex(/^[a-zA-Z0-9- ]{5,16}$/)
-      .required(),
-    seasonId: joi.number().required(),
-    priority: joi.number().required(),
-  }),
-};
+const fields = { title: c.title, seasonId: c.id, priority: c.priority };
 
-const update = {
-  params: joi.object().keys({
-    id: joi.number().required(),
-  }),
-  body: joi.object().keys({
-    title: joi
-      .string()
-      .regex(/^[a-zA-Z0-9- ]{5,16}$/)
-      .optional(),
-    seasonId: joi.number().optional(),
-    priority: joi.number().optional(),
-  }),
-};
 module.exports = {
-  read,
-  create,
-  update,
+  read: { params: c.idParams },
+  create: {
+    body: joi.object().keys({
+      title: fields.title.required(),
+      seasonId: fields.seasonId.required(),
+      priority: fields.priority.required(),
+    }),
+  },
+  update: { params: c.idParams, body: joi.object().keys(fields).min(1) },
+  remove: { params: c.idParams },
 };

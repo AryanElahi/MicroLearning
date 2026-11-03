@@ -1,50 +1,27 @@
-/* eslint-disable no-dupe-keys */
-const { number } = require("joi");
 const joi = require("joi");
+const c = require("./common");
 
-const read = {
-  params: joi.object().keys({
-    id: joi.number().required(),
-  }),
-};
-const create = {
-  body: joi.object().keys({
-    title: joi
-      .string()
-      .regex(/^[a-zA-Z0-9- ]{5,16}$/)
-      .required(),
-    chapterId: joi.number().required(),
-    priority: joi.number().optional(),
-    timeToRead: joi.number().optional(),
-    content: joi.any().optional(),
-    type: joi
-      .string()
-      .valid(...["task", "quiz"])
-      .required(),
-  }),
+const TASK_TYPES = ["task", "quiz"];
+
+const fields = {
+  title: c.title,
+  chapterId: c.id,
+  priority: c.priority,
+  timeToRead: joi.number().integer().min(1),
+  content: joi.alternatives().try(joi.object(), joi.array()),
+  type: joi.string().valid(...TASK_TYPES),
 };
 
-const update = {
-  params: joi.object().keys({
-    id: joi.number().required(),
-  }),
-  body: joi.object().keys({
-    title: joi
-      .string()
-      .regex(/^[a-zA-Z0-9- ]{5,16}$/)
-      .optional(),
-    chapterId: joi.number().optional(),
-    priority: joi.number().optional(),
-    timeToRead: joi.number().optional(),
-    content: joi.any().optional(),
-    type: joi
-      .string()
-      .valid(...["task", "quiz"])
-      .optional(),
-  }),
-};
 module.exports = {
-  read,
-  create,
-  update,
+  read: { params: c.idParams },
+  create: {
+    body: joi.object().keys({
+      ...fields,
+      title: fields.title.required(),
+      chapterId: fields.chapterId.required(),
+      type: fields.type.required(),
+    }),
+  },
+  update: { params: c.idParams, body: joi.object().keys(fields).min(1) },
+  remove: { params: c.idParams },
 };

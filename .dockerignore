@@ -1,0 +1,11 @@
+node_modules
+.git
+.env
+.env.*
+!.env.example
+coverage
+tests
+src/media/*
+microlearning-postgres
+microImages
+*.log

@@ -1,59 +1,38 @@
-/* eslint-disable no-dupe-keys */
-const { number } = require("joi");
 const joi = require("joi");
+const c = require("./common");
 
-const read = {
-  params: joi.object().keys({
-    id: joi.number().required(),
-  }),
-};
-const create = {
-  body: joi.object().keys({
-    title: joi
-      .string()
-      .regex(/^[a-zA-Z0-9- ]{5,16}$/)
-      .required(),
-    teacherId: joi.number().required(),
-    description: joi
-      .string()
-      .regex(/^[a-zA-Z0-9- ]{1,200}$/)
-      .optional(),
-    rate: joi.number().optional(),
-    taskcount: joi.number().optional(),
-    isLocked: joi.bool().optional(),
-  }),
+const fields = {
+  title: c.title,
+  teacherId: c.id,
+  // Defaults to the teacher when omitted on create.
+  mentorId: c.id,
+  description: joi.string().trim().max(2000).allow(""),
+  rate: joi.number().integer().min(0).max(5).allow(null),
+  taskcount: joi.number().integer().min(0).allow(null),
+  startTime: joi.date().iso(),
+  endTime: joi.date().iso(),
+  isLocked: joi.bool(),
 };
 
-const update = {
-  params: joi.object().keys({
-    id: joi.number().required(),
-  }),
-  body: joi.object().keys({
-    title: joi
-      .string()
-      .regex(/^[a-zA-Z0-9- ]{5,16}$/)
-      .optional(),
-    teacherId: joi.number().optional(),
-    description: joi
-      .string()
-      .regex(/^[a-zA-Z0-9- ]{1,200}$/)
-      .optional(),
-    rate: joi.number().optional(),
-    isLocked: joi.bool().optional(),
-    taskcount: joi.number().optional(),
-  }),
-};
-const lock = {
-  params: joi.object().keys({
-    id: joi.number().required(),
-  }),
-  body: joi.object().keys({
-    lockStatus: joi.bool().required(),
-  }),
-};
+const endAfterStart = (value, helpers) =>
+  value.startTime && value.endTime && value.endTime <= value.startTime
+    ? helpers.message("endTime must be after startTime")
+    : value;
+
 module.exports = {
-  read,
-  create,
-  update,
-  lock,
+  read: { params: c.idParams },
+  create: {
+    body: joi
+      .object()
+      .keys({
+        ...fields,
+        title: fields.title.required(),
+        teacherId: fields.teacherId.required(),
+        description: fields.description.default(""),
+      })
+      .custom(endAfterStart),
+  },
+  update: { params: c.idParams, body: joi.object().keys(fields).min(1).custom(endAfterStart) },
+  lock: { params: c.idParams, body: joi.object().keys({ lockStatus: joi.bool().required() }) },
+  remove: { params: c.idParams },
 };

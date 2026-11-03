@@ -1,141 +1,79 @@
 const express = require("express");
-const validate = require("../../../middlewares/validate.middleware");
-const userAuthValidationSchema = require("../../../../validation/validation.user.auth.services");
-const {
-  signup,
-  verify,
-  login,
-  logout,
-  refreshToken,
-  forgetPassword,
-  verifyForgetPassword,
-  checkRefreshToken,
-  checkIfBlocked,
-  getUserbyId,
-} = require("../../../../services/user.services");
-const { ApiError } = require("../../../middlewares/errorHandling.middleware");
-const { isAuth } = require("../../../middlewares/isAuth.middleware");
+const { isAuth, validate } = require("../../../middlewares");
+const { authLimiter } = require("../../../middlewares/rateLimit.middleware");
+const schema = require("../../../../validation/validation.user.auth.services");
+const userService = require("../../../../services/user.services");
+const { toResponse } = require("../../../../services/token.services");
+const asyncHandler = require("../../../../utils/asyncHandler");
 
 const router = express.Router();
 
 router.post(
   "/signup",
-  validate(userAuthValidationSchema.signup),
-  async (req, res, next) => {
-    try {
-      const { phone } = req.body;
-      const resault = await signup(phone);
-      return res.send(resault);
-    } catch (error) {
-      return next(new ApiError(error.statusCode, error.message));
-    }
-  }
+  authLimiter,
+  validate(schema.signup),
+  asyncHandler(async (req, res) => {
+    await userService.signup(req.body.phone);
+    res.json({ message: "Verification code sent" });
+  })
 );
 
 router.post(
   "/verify",
-  validate(userAuthValidationSchema.verify),
-  async (req, res, next) => {
-    try {
-      const { phone, code, password } = req.body;
-      console.log(code);
-      const resault = await verify(phone, code, password);
-      return res.send({
-        Refresh_Token: resault.refreshtoken,
-        Access_Token: resault.accesstoken,
-      });
-    } catch (error) {
-      return next(new ApiError(error.statusCode, error.message));
-    }
-  }
+  authLimiter,
+  validate(schema.verify),
+  asyncHandler(async (req, res) => {
+    const { phone, code, password } = req.body;
+    res.status(201).json(toResponse(await userService.verify(phone, code, password)));
+  })
 );
 
 router.post(
   "/login",
-  validate(userAuthValidationSchema.login),
-  async (req, res, next) => {
-    try {
-      const { phone, password } = req.body;
-      if (await checkIfBlocked(phone))
-        return next(new ApiError(403, "access denied! This user is blocked."));
-      const resault = await login(phone, password);
-      return res.send({
-        Refresh_Token: resault.refreshtoken,
-        Access_Token: resault.accesstoken,
-      });
-    } catch (error) {
-      return next(new ApiError(error.statusCode, error.message));
-    }
-  }
+  authLimiter,
+  validate(schema.login),
+  asyncHandler(async (req, res) => {
+    const { phone, password } = req.body;
+    res.json(toResponse(await userService.login(phone, password)));
+  })
 );
 
+// No access token required: refreshing is exactly what you do once it expired.
 router.post(
   "/refreshToken",
-  isAuth,
-  validate(userAuthValidationSchema.refreshToken),
-  async (req, res, next) => {
-    try {
-      const { RefreshToken } = req.body;
-      const userId = await checkRefreshToken(RefreshToken);
-      const user = await getUserbyId(userId);
-      if (await checkIfBlocked(user.phone))
-        return next(new ApiError(403, "access denied! This user is blocked."));
-      if (userId) {
-        const resault = await refreshToken(userId);
-        return res.send({
-          Refresh_Token: resault.refreshtoken,
-          Access_Token: resault.accesstoken,
-        });
-      }
-    } catch (error) {
-      return next(new ApiError(error.statusCode, error.message));
-    }
-  }
+  validate(schema.refreshToken),
+  asyncHandler(async (req, res) => {
+    res.json(toResponse(await userService.refresh(req.body.RefreshToken)));
+  })
 );
 
 router.post(
   "/logout",
   isAuth,
-  //validate(userAuthValidationSchema.logout),
-  async (req, res, next) => {
-    try {
-      const id = req.client.id;
-      const resault = await logout(id);
-      return res.send();
-    } catch (error) {
-      return next(new ApiError(error.statusCode, error.message));
-    }
-  }
+  asyncHandler(async (req, res) => {
+    if (req.auth.type === "user") await userService.logout(req.auth.id);
+    res.status(204).end();
+  })
 );
 
 router.post(
   "/forgetpassword",
-  validate(userAuthValidationSchema.forgetPassword),
-  async (req, res, next) => {
-    try {
-      const { phone } = req.body;
-      if (await checkIfBlocked(phone))
-        return next(new ApiError(403, "access denied! This user is blocked."));
-      const resault = await forgetPassword(phone);
-      return res.send();
-    } catch (error) {
-      return next(new ApiError(error.statusCode, error.message));
-    }
-  }
+  authLimiter,
+  validate(schema.forgetPassword),
+  asyncHandler(async (req, res) => {
+    await userService.forgetPassword(req.body.phone);
+    res.json({ message: "If this number is registered, a code has been sent" });
+  })
 );
 
 router.post(
   "/verifyforgetpassword",
-  validate(userAuthValidationSchema.verifyForgetPassword),
-  async (req, res, next) => {
-    try {
-      const { phone, code, password } = req.body;
-      const resault = await verifyForgetPassword(phone, code, password);
-      return res.send();
-    } catch (error) {
-      return next(new ApiError(error.statusCode, error.message));
-    }
-  }
+  authLimiter,
+  validate(schema.verifyForgetPassword),
+  asyncHandler(async (req, res) => {
+    const { phone, code, password } = req.body;
+    res.json(toResponse(await userService.verifyForgetPassword(phone, code, password)));
+  })
 );
 
 module.exports = router;

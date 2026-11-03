@@ -1,6 +1,5 @@
 generator client {
-  provider   = "prisma-client-js"
-  engineType = "binary"
+  provider = "prisma-client-js"
 }
 
 datasource db {
@@ -19,44 +18,30 @@ model User {
   blocked      Boolean           @default(false)
   softDelete   Boolean           @default(false)
   address      String            @default("")
-  classes      studentsOnClass[]
+  courses      studentsOnClass[]
 }
 
 model Admin {
-  id           Int      @id @unique @default(autoincrement())
-  firstName    String   @default("")
-  lastName     String   @default("")
-  userName     String   @unique
-  profilePhoto String   @default("default.jpg")
-  role         String   @default("")
-  password     String   @default("")
-  refreshToken String   @default("")
-  softDelete   Boolean  @default(false)
-  permissions  Json     @db.JsonB
-  classes      Class[]
-  courses      Course[]
-}
-
-model Class {
-  id        Int               @id @default(autoincrement())
-  course    Course            @relation(fields: [courseID], references: [id])
-  courseID  Int
-  mentor    Admin             @relation(fields: [mentorID], references: [id])
-  mentorID  Int
-  title     String
-  startTime DateTime
-  endTime   DateTime
-  isLocked  Boolean           @default(false)
-  capacity  Int               @default(0)
-  students  studentsOnClass[]
+  id             Int      @id @unique @default(autoincrement())
+  firstName      String   @default("")
+  lastName       String   @default("")
+  userName       String   @unique
+  profilePhoto   String   @default("default.jpg")
+  role           String   @default("")
+  password       String   @default("")
+  refreshToken   String   @default("")
+  softDelete     Boolean  @default(false)
+  permissions    Json     @db.JsonB
+  teacherCourses Course[] @relation(name: "teacher")
+  mentorCourses  Course[] @relation(name: "mentor")
 }
 
 model studentsOnClass {
   id        Int      @id @default(autoincrement())
   student   User     @relation(fields: [userID], references: [id])
   userID    Int
-  class     Class    @relation(fields: [classID], references: [id])
-  classID   Int
+  course    Course   @relation(fields: [courseID], references: [id])
+  courseID  Int
   mark      Int      @default(0)
   progress  Float    @default(0.0)
   startTime DateTime
@@ -66,17 +51,20 @@ model studentsOnClass {
 }
 
 model Course {
-  id          Int      @id @default(autoincrement())
-  teacher     Admin    @relation(fields: [teacherID], references: [id])
+  id          Int               @id @default(autoincrement())
+  teacher     Admin             @relation(name: "teacher", fields: [teacherID], references: [id])
   teacherID   Int
+  mentor      Admin             @relation(name: "mentor", fields: [mentorID], references: [id])
+  mentorID    Int
   title       String
   description String
   rate        Int?
   taskcount   Int?
-  isLocked    Boolean  @default(false)
+  startTime   DateTime
+  endTime     DateTime
+  isLocked    Boolean           @default(false)
   seasons     season[]
-
-  classes Class[]
+  students    studentsOnClass[]
 }
 
 model season {
@@ -107,15 +95,3 @@ model task {
   timeToRead Int     @default(1)
   type       String
 }
-
-//model Quize {
-//  id   Int    @id @default(autoincrement())
-//  row1 String @default("")
-//  row2 String @default("")
-//  row3 String @default("")
-//}
-
-//model test {
-//  id   Int    @id @default(autoincrement())
-//  name String @default("")
-//}

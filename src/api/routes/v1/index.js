@@ -14,7 +14,6 @@ const v1Loader = () => {
   router.use("/manageUser", manageUserV1);
   router.use("/manageAdmin", manageAdminV1);
   router.use("/course", courseV1());
-
   return router;
 };
 

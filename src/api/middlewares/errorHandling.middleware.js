@@ -1,39 +1,60 @@
-require("dotenv").config();
+const { Prisma } = require("@prisma/client");
+const config = require("../../config");
+const logger = require("../../utils/logger");
+const ApiError = require("../../utils/ApiError");
 
-class ApiError extends Error {
-  constructor(statusCode, message, isOperational = true, stack = "") {
-    super(message);
-    this.statusCode = statusCode;
-    this.isOperational = isOperational;
-    if (stack) {
-      this.stack = stack;
-    } else {
-      Error.captureStackTrace(this, this.constructor);
-    }
+/** Translate well-known Prisma errors into meaningful HTTP errors. */
+const fromPrismaError = (err) => {
+  if (!(err instanceof Prisma.PrismaClientKnownRequestError)) return null;
+  switch (err.code) {
+    case "P2002":
+      return ApiError.conflict("A record with the same unique value already exists");
+    case "P2003":
+      return ApiError.conflict(
+        "Operation violates a relation: a related record is missing or still in use"
+      );
+    case "P2025":
+      return ApiError.notFound("Record not found");
+    default:
+      return null;
   }
-}
+};
 
-// Send response on errors
-// eslint-disable-next-line no-unused-vars
+const normalizeError = (err) => {
+  if (err instanceof ApiError) return err;
+  const prismaError = fromPrismaError(err);
+  if (prismaError) return prismaError;
+  if (err && err.type === "entity.parse.failed") {
+    return ApiError.badRequest("Malformed JSON body");
+  }
+  if (err && err.type === "entity.too.large") {
+    return new ApiError(413, "Request body is too large");
+  }
+  return new ApiError(500, "Internal server error", { isOperational: false });
+};
+
+const notFoundHandler = (req, res, next) => {
+  next(ApiError.notFound(`Route ${req.method} ${req.originalUrl} not found`));
+};
+
+// Express recognises error middleware by its four arguments.
+
 const errorHandler = (err, req, res, next) => {
-  let { statusCode, message } = err;
+  const apiError = normalizeError(err);
 
-  res.locals.errorMessage = err.message;
-
-  const response = {
-    code: statusCode,
-    message,
-    ...(process.env.ENVIRONMENT === "development" && { stack: err.stack }),
-  };
-
-  if (process.env.ENVIRONMENT === "development") {
-    console.error(err);
+  if (!apiError.isOperational || apiError.statusCode >= 500) {
+    logger.error(err);
   }
 
-  res.status(statusCode).send(response);
+  res.status(apiError.statusCode).json({
+    code: apiError.statusCode,
+    message: apiError.message,
+    ...(config.isDevelopment && { stack: err && err.stack }),
+  });
 };
 
 module.exports = {
-  errorHandler,
   ApiError,
+  errorHandler,
+  notFoundHandler,
 };

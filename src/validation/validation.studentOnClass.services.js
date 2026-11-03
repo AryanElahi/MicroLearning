@@ -1,52 +1,33 @@
-/* eslint-disable no-dupe-keys */
-const { number } = require("joi");
 const joi = require("joi");
+const c = require("./common");
 
-const read = {
-  params: joi.object().keys({
-    id: joi.number().required(),
-  }),
-};
-const readStudentOnClass = {
-  params: joi.object().keys({
-    userID: joi.number().required(),
-    classID: joi.number().required(),
-  }),
-};
-const create = {
-  body: joi.object().keys({
-    userId: joi.number().required(),
-    classId: joi.number().required(),
-    mark: joi.number().optional(),
-    progress: joi.number().precision(2).strict().optional(),
-    startTime: joi.date().optional().default("2022-01-01T00:00:00.000Z"),
-    endTime: joi.date().optional().default("2027-01-01T00:00:00.000Z"),
-  }),
+const enrollmentParams = joi.object().keys({
+  userId: c.id.required(),
+  courseId: c.id.required(),
+});
+
+const fields = {
+  mark: joi.number().integer().min(0),
+  progress: joi.number().min(0).max(100),
+  startTime: joi.date().iso(),
+  endTime: joi.date().iso(),
 };
 
-const update = {
-  params: joi.object().keys({
-    userId: joi.number().required(),
-    classId: joi.number().required(),
-  }),
-  body: joi.object().keys({
-    mark: joi.number().optional(),
-    progress: joi.number().precision(2).strict().optional(),
-    startTime: joi.date().optional(),
-    endTime: joi.date().optional(),
-  }),
-};
-const updateDone = {
-  params: joi.object().keys({
-    userId: joi.number().required(),
-    classId: joi.number().required(),
-    taskId: joi.number().required(),
-  }),
-};
 module.exports = {
-  read,
-  readStudentOnClass,
-  create,
-  update,
-  updateDone,
+  read: { params: c.idParams },
+  readStudentOnCourse: { params: enrollmentParams },
+  create: {
+    body: joi.object().keys({
+      userId: c.id.required(),
+      courseId: c.id.required(),
+      ...fields,
+      startTime: fields.startTime.default(() => new Date()),
+      endTime: fields.endTime.default(() => new Date(Date.now() + 365 * 24 * 3600 * 1000)),
+    }),
+  },
+  update: { params: enrollmentParams, body: joi.object().keys(fields).min(1) },
+  updateDone: {
+    params: enrollmentParams.keys({ taskId: c.id.required() }),
+  },
+  remove: { params: enrollmentParams },
 };
