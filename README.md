@@ -1,7 +1,8 @@
 # MicroLearning API
 
-REST API for a micro-learning platform. Admins build **courses → seasons → chapters → tasks**,
-open **classes** for a course and enroll students; students sign up with an SMS one-time code.
+REST API for a micro-learning platform. Admins build **courses → seasons → chapters → tasks**
+(each course has a teacher, a mentor and a start/end date) and enroll students in courses;
+students sign up with an SMS one-time code.
 
 **Stack:** Node.js · Express · PostgreSQL · Prisma · Joi · JWT · CASL
 
@@ -10,7 +11,7 @@ open **classes** for a course and enroll students; students sign up with an SMS 
 - Student sign-up / password reset with SMS OTP ([Kavenegar](https://kavenegar.com))
 - Admin roles with permissions: `Admin`, `Teacher`, `Supervisor` (read-only)
 - Access + rotating refresh tokens
-- Course content CRUD, class capacity & locking, student progress and finished tasks
+- Course content CRUD, course locking, student enrollment, progress and finished tasks
 - Media upload
 - Request validation, consistent JSON errors, rate limiting, security headers
 
@@ -64,19 +65,18 @@ than 32 characters).
 Base URL: `/api/v1`. Send the access token as `Authorization: Bearer <token>`
 (the legacy `access-token` header is also accepted).
 
-| Area         | Endpoints                                                                                                                                                                                                                                                              |
-| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Student auth | `POST /authUser/signup`, `/verify`, `/login`, `/refreshToken`, `/logout`, `/forgetpassword`, `/verifyforgetpassword`                                                                                                                                                   |
-| Admin auth   | `POST /authAdmin/login`, `/refreshToken`, `/logout` (`/signup` in development only)                                                                                                                                                                                    |
-| Admins       | `GET /manageAdmin/getAllAdmins?page&size`, `GET\|PUT\|DELETE /manageAdmin/:userName`, `POST /manageAdmin`                                                                                                                                                              |
-| Students     | `GET /manageUser/getAllUsers?page&size`, `GET\|PUT\|DELETE /manageUser/:phone`, `POST /manageUser`                                                                                                                                                                     |
-| Courses      | `GET /course/getAllCourses`, `GET\|PUT\|DELETE /course/:id`, `POST /course`, `PUT /course/lock/:id`                                                                                                                                                                    |
-| Seasons      | `/course/season` — CRUD, `GET /getAllSeasons`, `GET /getSeasonsOfCourse/:courseId`                                                                                                                                                                                     |
-| Chapters     | `/course/chapter` — CRUD, `GET /getAllChapters`, `GET /getChaptersOfSeason/:seasonId`                                                                                                                                                                                  |
-| Tasks        | `/course/task` — CRUD, `GET /getalltasks`, `GET /gettasksofchapter/:chapterId`, `POST /upload`                                                                                                                                                                         |
-| Classes      | `/course/class` — CRUD, `GET /getAllClasses`, `PUT /lock/:id`                                                                                                                                                                                                          |
-| Enrollment   | `/course/studentOnClass` — `POST /addStudentToClass`, `GET /getAllstudentsOnClass/:classId`, `GET /getclassesofstudent/:userId`, `GET /getStudentById/:userId/:classId`, `PUT /:userId/:classId`, `PUT /doneTask/:userId/:classId/:taskId`, `DELETE /:userId/:classId` |
-| Upload       | `POST /uploader` (multipart field `media`) → `{ "url": "..." }`                                                                                                                                                                                                        |
+| Area         | Endpoints                                                                                                                                                                                                                                                                    |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Student auth | `POST /authUser/signup`, `/verify`, `/login`, `/refreshToken`, `/logout`, `/forgetpassword`, `/verifyforgetpassword`                                                                                                                                                         |
+| Admin auth   | `POST /authAdmin/login`, `/refreshToken`, `/logout` (`/signup` in development only)                                                                                                                                                                                          |
+| Admins       | `GET /manageAdmin/getAllAdmins?page&size`, `GET\|PUT\|DELETE /manageAdmin/:userName`, `POST /manageAdmin`                                                                                                                                                                    |
+| Students     | `GET /manageUser/getAllUsers?page&size`, `GET\|PUT\|DELETE /manageUser/:phone`, `POST /manageUser`                                                                                                                                                                           |
+| Courses      | `GET /course/getAllCourses`, `GET\|PUT\|DELETE /course/:id`, `POST /course`, `PUT /course/lock/:id`                                                                                                                                                                          |
+| Seasons      | `/course/season` — CRUD, `GET /getAllSeasons`, `GET /getSeasonsOfCourse/:courseId`                                                                                                                                                                                           |
+| Chapters     | `/course/chapter` — CRUD, `GET /getAllChapters`, `GET /getChaptersOfSeason/:seasonId`                                                                                                                                                                                        |
+| Tasks        | `/course/task` — CRUD, `GET /getalltasks`, `GET /gettasksofchapter/:chapterId`, `POST /upload`                                                                                                                                                                               |
+| Enrollment   | `/course/studentOnClass` — `POST /addStudentToCourse`, `GET /getAllstudentsOnClass/:courseId`, `GET /getclassesofstudent/:userId`, `GET /getStudentById/:userId/:courseId`, `PUT /:userId/:courseId`, `PUT /doneTask/:userId/:courseId/:taskId`, `DELETE /:userId/:courseId` |
+| Upload       | `POST /uploader` (multipart field `media`) → `{ "url": "..." }`                                                                                                                                                                                                              |
 
 Errors always look like `{ "code": 404, "message": "Course not found" }`.
 

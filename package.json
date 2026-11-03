@@ -1,6 +1,6 @@
 {
   "name": "microlearning",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "private": true,
   "description": "REST API for a micro-learning platform: courses, seasons, chapters, tasks, classes and OTP-based student authentication.",
   "main": "src/index.js",

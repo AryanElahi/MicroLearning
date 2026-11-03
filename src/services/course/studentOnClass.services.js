@@ -1,44 +1,41 @@
+/**
+ * Enrollment of students in courses (the `studentsOnClass` table; classes were
+ * merged into courses, the table name was kept to avoid a data migration).
+ */
 const prisma = require("../../lib/prisma");
 const ApiError = require("../../utils/ApiError");
 const { pickDefined } = require("../../utils/sanitize");
 
 const EDITABLE_FIELDS = ["mark", "progress", "startTime", "endTime"];
+const NOT_ENROLLED = "This student is not enrolled in this course";
 
-const getStudentOnClass = (userID, classID) =>
-  prisma.studentsOnClass.findFirst({ where: { userID, classID } });
+const getEnrollment = (userID, courseID) =>
+  prisma.studentsOnClass.findFirst({ where: { userID, courseID } });
 
-const getRequired = async (userID, classID) => {
-  const record = await getStudentOnClass(userID, classID);
-  if (!record) throw ApiError.notFound("This student is not enrolled in this class");
+const getRequired = async (userID, courseID) => {
+  const record = await getEnrollment(userID, courseID);
+  if (!record) throw ApiError.notFound(NOT_ENROLLED);
   return record;
 };
 
-async function addStudent({ userId, classId, ...rest }) {
-  if (await getStudentOnClass(userId, classId)) {
-    throw ApiError.conflict("This student is already enrolled in this class");
+async function addStudent({ userId, courseId, ...rest }) {
+  if (await getEnrollment(userId, courseId)) {
+    throw ApiError.conflict("This student is already enrolled in this course");
   }
-  return prisma.$transaction(async (tx) => {
-    const klass = await tx.class.findUnique({
-      where: { id: classId },
-      include: { _count: { select: { students: true } } },
-    });
-    if (!klass) throw ApiError.notFound("Class not found");
-    if (klass.isLocked) throw ApiError.badRequest("This class is locked");
-    if (klass.capacity > 0 && klass._count.students >= klass.capacity) {
-      throw ApiError.badRequest("This class is full");
-    }
-    return tx.studentsOnClass.create({
-      data: {
-        userID: userId,
-        classID: classId,
-        ...pickDefined(rest, EDITABLE_FIELDS),
-      },
-    });
+  const course = await prisma.course.findUnique({ where: { id: courseId } });
+  if (!course) throw ApiError.notFound("Course not found");
+  if (course.isLocked) throw ApiError.badRequest("This course is locked");
+  return prisma.studentsOnClass.create({
+    data: {
+      userID: userId,
+      courseID: courseId,
+      ...pickDefined(rest, EDITABLE_FIELDS),
+    },
   });
 }
 
-async function updateStudent(userId, classId, changes) {
-  const record = await getRequired(userId, classId);
+async function updateStudent(userId, courseId, changes) {
+  const record = await getRequired(userId, courseId);
   return prisma.studentsOnClass.update({
     where: { id: record.id },
     data: pickDefined(changes, EDITABLE_FIELDS),
@@ -46,8 +43,8 @@ async function updateStudent(userId, classId, changes) {
 }
 
 /** Marks a task as done for a student (idempotent). */
-async function markTaskDone(userId, classId, taskId) {
-  const record = await getRequired(userId, classId);
+async function markTaskDone(userId, courseId, taskId) {
+  const record = await getRequired(userId, courseId);
   if (record.done.includes(taskId)) return record;
   return prisma.studentsOnClass.update({
     where: { id: record.id },
@@ -55,21 +52,22 @@ async function markTaskDone(userId, classId, taskId) {
   });
 }
 
-const getStudentsOfClass = (classID) => prisma.studentsOnClass.findMany({ where: { classID } });
+const getStudentsOfCourse = (courseID) => prisma.studentsOnClass.findMany({ where: { courseID } });
 
-const getClassesOfStudent = (userID) => prisma.studentsOnClass.findMany({ where: { userID } });
+const getCoursesOfStudent = (userID) => prisma.studentsOnClass.findMany({ where: { userID } });
 
-async function removeStudent(userId, classId) {
-  const record = await getRequired(userId, classId);
+async function removeStudent(userId, courseId) {
+  const record = await getRequired(userId, courseId);
   await prisma.studentsOnClass.delete({ where: { id: record.id } });
 }
 
 module.exports = {
+  NOT_ENROLLED,
   addStudent,
   updateStudent,
   markTaskDone,
-  getStudentsOfClass,
-  getClassesOfStudent,
-  getStudentOnClass,
+  getStudentsOfCourse,
+  getCoursesOfStudent,
+  getEnrollment,
   removeStudent,
 };

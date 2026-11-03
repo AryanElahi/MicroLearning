@@ -74,8 +74,11 @@ describe("authentication & authorization", () => {
       .set("Authorization", `Bearer ${tokenFor(1, "admin")}`)
       .send({ title: "دوره پایتون", teacherId: 1 });
     expect(res.status).toBe(201);
-    expect(prisma.course.create).toHaveBeenCalledWith({
-      data: { title: "دوره پایتون", description: "", teacherID: 1 },
+    expect(prisma.course.create.mock.calls[0][0].data).toMatchObject({
+      title: "دوره پایتون",
+      description: "",
+      teacherID: 1,
+      mentorID: 1,
     });
   });
 });
@@ -217,17 +220,40 @@ describe("course content", () => {
     expect(res.status).toBe(200);
   });
 
-  it("maps camelCase ids to the Prisma columns when updating a class", async () => {
-    prisma.class.update.mockResolvedValue({ id: 4 });
+  it("defaults the mentor to the teacher and fills course dates", async () => {
+    prisma.course.create.mockImplementation(async ({ data }) => ({ id: 3, ...data }));
     const res = await request(app)
-      .put("/api/v1/course/class/4")
+      .post("/api/v1/course")
       .set("Authorization", auth())
-      .send({ courseId: 2, mentorId: 3, capacity: 30 });
+      .send({ title: "Course", teacherId: 2 });
+    expect(res.status).toBe(201);
+    const { data } = prisma.course.create.mock.calls[0][0];
+    expect(data).toMatchObject({ teacherID: 2, mentorID: 2 });
+    expect(new Date(data.endTime) > new Date(data.startTime)).toBe(true);
+  });
+
+  it("maps camelCase ids to the Prisma columns when updating a course", async () => {
+    prisma.course.update.mockResolvedValue({ id: 4 });
+    const res = await request(app)
+      .put("/api/v1/course/4")
+      .set("Authorization", auth())
+      .send({ teacherId: 2, mentorId: 3 });
     expect(res.status).toBe(200);
-    expect(prisma.class.update).toHaveBeenCalledWith({
+    // Dates are not reset on update.
+    expect(prisma.course.update).toHaveBeenCalledWith({
       where: { id: 4 },
-      data: { capacity: 30, courseID: 2, mentorID: 3 },
+      data: { teacherID: 2, mentorID: 3 },
     });
+  });
+
+  it("rejects a course that ends before it starts", async () => {
+    const res = await request(app).post("/api/v1/course").set("Authorization", auth()).send({
+      title: "Course",
+      teacherId: 2,
+      startTime: "2025-02-01T00:00:00.000Z",
+      endTime: "2025-01-01T00:00:00.000Z",
+    });
+    expect(res.status).toBe(400);
   });
 
   it("returns 404 for a missing record", async () => {
@@ -256,20 +282,27 @@ describe("course content", () => {
     expect(res.body.message).toBe("Internal server error");
   });
 
-  it("refuses to enroll a student in a full class", async () => {
+  it("refuses to enroll a student in a locked course", async () => {
     prisma.studentsOnClass.findFirst.mockResolvedValue(null);
-    prisma.class.findUnique.mockResolvedValue({
-      id: 1,
-      isLocked: false,
-      capacity: 1,
-      _count: { students: 1 },
-    });
+    prisma.course.findUnique.mockResolvedValue({ id: 1, isLocked: true });
     const res = await request(app)
-      .post("/api/v1/course/studentOnClass/addStudentToClass")
+      .post("/api/v1/course/studentOnClass/addStudentToCourse")
       .set("Authorization", auth())
-      .send({ userId: 5, classId: 1 });
+      .send({ userId: 5, courseId: 1 });
     expect(res.status).toBe(400);
     expect(prisma.studentsOnClass.create).not.toHaveBeenCalled();
+  });
+
+  it("enrolls a student in a course", async () => {
+    prisma.studentsOnClass.findFirst.mockResolvedValue(null);
+    prisma.course.findUnique.mockResolvedValue({ id: 1, isLocked: false });
+    prisma.studentsOnClass.create.mockImplementation(async ({ data }) => ({ id: 1, ...data }));
+    const res = await request(app)
+      .post("/api/v1/course/studentOnClass/addStudentToCourse")
+      .set("Authorization", auth())
+      .send({ userId: 5, courseId: 1 });
+    expect(res.status).toBe(201);
+    expect(res.body).toMatchObject({ userID: 5, courseID: 1 });
   });
 
   it("marks a task done only once", async () => {

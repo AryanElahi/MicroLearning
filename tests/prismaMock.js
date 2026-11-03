@@ -2,7 +2,7 @@
  * A minimal in-test replacement for the Prisma client. Every model method is a
  * jest.fn() so each test can describe exactly what the database returns.
  */
-const models = ["admin", "user", "course", "season", "chapter", "task", "class", "studentsOnClass"];
+const models = ["admin", "user", "course", "season", "chapter", "task", "studentsOnClass"];
 const methods = ["findUnique", "findFirst", "findMany", "count", "create", "update", "delete"];
 
 const prisma = {};

@@ -4,8 +4,7 @@ const asyncHandler = require("../../../../utils/asyncHandler");
 const ApiError = require("../../../../utils/ApiError");
 
 /**
- * Builds the standard CRUD routes shared by course, season, chapter, task
- * and class:
+ * Builds the standard CRUD routes shared by course, season, chapter and task:
  *
  *   GET    {listPath}   list all
  *   GET    /:id         get one

@@ -3,7 +3,7 @@ const c = require("./common");
 
 const enrollmentParams = joi.object().keys({
   userId: c.id.required(),
-  classId: c.id.required(),
+  courseId: c.id.required(),
 });
 
 const fields = {
@@ -15,11 +15,11 @@ const fields = {
 
 module.exports = {
   read: { params: c.idParams },
-  readStudentOnClass: { params: enrollmentParams },
+  readStudentOnCourse: { params: enrollmentParams },
   create: {
     body: joi.object().keys({
       userId: c.id.required(),
-      classId: c.id.required(),
+      courseId: c.id.required(),
       ...fields,
       startTime: fields.startTime.default(() => new Date()),
       endTime: fields.endTime.default(() => new Date(Date.now() + 365 * 24 * 3600 * 1000)),

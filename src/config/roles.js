@@ -1,15 +1,6 @@
 const ACTIONS = ["create", "read", "update", "delete"];
 
-const SUBJECTS = [
-  "Admin",
-  "User",
-  "Course",
-  "Season",
-  "Chapter",
-  "Task",
-  "Class",
-  "StudentOnClass",
-];
+const SUBJECTS = ["Admin", "User", "Course", "Season", "Chapter", "Task", "StudentOnClass"];
 
 const ROLES = ["Admin", "Teacher", "Supervisor"];
 
