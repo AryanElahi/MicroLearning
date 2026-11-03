@@ -1,95 +1,28 @@
 const joi = require("joi");
+const c = require("./common");
 
-const signup = {
-  body: joi.object().keys({
-    phone: joi
-      .string()
-      .length(11)
-      .regex(/^09\d{9}$/)
-      .required(),
-  }),
-};
+const phoneOnly = { body: joi.object().keys({ phone: c.phone.required() }) };
 
-const verify = {
+const phoneCodePassword = {
   body: joi.object().keys({
-    phone: joi
-      .string()
-      .length(11)
-      .regex(/^09\d{9}$/)
-      .required(),
-    code: joi
-      .string()
-      .regex(/^[0-9]+$/)
-      .required(),
-    password: joi
-      .string()
-      .regex(/^[a-zA-Z0-9- ]{8,16}$/)
-      .required(),
+    phone: c.phone.required(),
+    code: c.otpCode.required(),
+    password: c.newPassword.required(),
   }),
 };
 
 const login = {
   body: joi.object().keys({
-    phone: joi
-      .string()
-      .length(11)
-      .regex(/^09\d{9}$/)
-      .required(),
-    password: joi
-      .string()
-      .regex(/^[a-zA-Z0-9- ]{8,16}$/)
-      .required(),
-  }),
-};
-
-// const logout = {
-//   body: joi.object().keys({
-//     phone: joi
-//       .string()
-//       .length(11)
-//       .regex(/^09\d{9}$/)
-//       .required(),
-//   }),
-// };
-const refreshToken = {
-  body: joi.object().keys({
-    RefreshToken: joi.string().required(),
-  }),
-};
-const forgetPassword = {
-  body: joi.object().keys({
-    phone: joi
-      .string()
-      .length(11)
-      .regex(/^09\d{9}$/)
-      .required(),
-  }),
-};
-
-const verifyForgetPassword = {
-  body: joi.object().keys({
-    phone: joi
-      .string()
-      .length(11)
-      .regex(/^09\d{9}$/)
-      .required(),
-    code: joi
-      .string()
-      .regex(/^[0-9]+$/)
-      .required(),
-    password: joi
-      .string()
-      .regex(/^[a-zA-Z0-9- ]{8,16}$/)
-      .required(),
+    phone: c.phone.required(),
+    password: c.loginPassword.required(),
   }),
 };
 
 module.exports = {
-  signup,
-  verify,
+  signup: phoneOnly,
+  verify: phoneCodePassword,
   login,
-  //logout,
-  refreshToken,
-  forgetPassword,
-  verifyForgetPassword,
+  refreshToken: { body: c.refreshTokenBody },
+  forgetPassword: phoneOnly,
+  verifyForgetPassword: phoneCodePassword,
 };

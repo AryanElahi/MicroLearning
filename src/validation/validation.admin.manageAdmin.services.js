@@ -1,77 +1,37 @@
-/* eslint-disable no-dupe-keys */
 const joi = require("joi");
+const c = require("./common");
 
-const read = {
-  params: joi.object().keys({
-    userName: joi
-      .string()
-      .regex(/^[a-zA-Z0-9- ]{5,16}$/)
-      .required(),
-  }),
-};
+const userNameParams = joi.object().keys({ userName: joi.string().trim().required() });
+
+const getAll = { query: c.pagination };
+
+const read = { params: userNameParams };
+
 const create = {
   body: joi.object().keys({
-    userName: joi
-      .string()
-      .regex(/^[a-zA-Z0-9- ]{5,16}$/)
-      .required(),
-    softDelete: joi.bool().optional(),
-    profilePhoto: joi
-      .string()
-      .regex(/^[a-zA-Z0-9- ]{5,50}$/)
-      .optional(),
-    password: joi
-      .string()
-      .regex(/^[a-zA-Z0-9- ]{8,16}$/)
-      .required(),
-    role: joi
-      .string()
-      .valid(...["Admin", "Teacher", "Supervisor"])
-      .required(),
-    firstName: joi
-      .string()
-      .regex(/^[a-zA-Z]{3,16}$/)
-      .optional(),
-    lastName: joi
-      .string()
-      .regex(/^[a-zA-Z]{3,16}$/)
-      .optional(),
+    userName: c.userName.required(),
+    password: c.newPassword.required(),
+    role: c.role.required(),
+    firstName: c.personName,
+    lastName: c.personName,
+    profilePhoto: joi.string().max(500),
   }),
 };
 
 const update = {
-  params: joi.object().keys({
-    userName: joi
-      .string()
-      .regex(/^[a-zA-Z0-9- ]{5,16}$/)
-      .required(),
-  }),
-  body: joi.object().keys({
-    password: joi
-      .string()
-      .regex(/^[a-zA-Z0-9- ]{8,16}$/)
-      .optional(),
-    profilePhoto: joi
-      .string()
-      .regex(/^[a-zA-Z0-9- ]{5,50}$/)
-      .optional(),
-    role: joi
-      .string()
-      .valid(...["Admin", "Teacher", "Supervisor"])
-      .optional(),
-    firstName: joi
-      .string()
-      .regex(/^[a-zA-Z]{3,16}$/)
-      .optional(),
-    lastName: joi
-      .string()
-      .regex(/^[a-zA-Z]{3,16}$/)
-      .optional(),
-  }),
+  params: userNameParams,
+  body: joi
+    .object()
+    .keys({
+      password: c.newPassword,
+      role: c.role,
+      firstName: c.personName,
+      lastName: c.personName,
+      profilePhoto: joi.string().max(500),
+    })
+    .min(1),
 };
 
-module.exports = {
-  read,
-  create,
-  update,
-};
+const remove = { params: userNameParams };
+
+module.exports = { getAll, read, create, update, remove };

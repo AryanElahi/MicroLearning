@@ -1,26 +1,16 @@
 const express = require("express");
-const router = express.Router();
-const { isAuth } = require("../../../middlewares/isAuth.middleware");
-const { isCan } = require("../../../middlewares/isCan.middleware");
-const { fetchAdmin } = require("../../../middlewares/fetchAdmin.middleware");
-const { ApiError } = require("../../../middlewares/errorHandling.middleware");
-const uploader = require("../../../../services/file-upload");
+const { adminOnly } = require("../../../middlewares");
+const { uploadMedia } = require("../../../../services/upload.services");
+const asyncHandler = require("../../../../utils/asyncHandler");
 
-//uploader media
+const router = express.Router();
+
 router.post(
   "/",
-  isAuth,
-  fetchAdmin,
-  isCan("create", "Task"),
-  (req, res, next) => {
-    uploader(req, "media")
-      .then((result) => {
-        res.send(result);
-      })
-      .catch((error) => {
-        return next(new ApiError(400, error.message));
-      });
-  }
+  adminOnly("create", "Task"),
+  asyncHandler(async (req, res) => {
+    res.status(201).json(await uploadMedia(req));
+  })
 );
 
 module.exports = router;

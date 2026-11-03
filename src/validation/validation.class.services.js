@@ -1,55 +1,35 @@
-/* eslint-disable no-dupe-keys */
-const { number } = require("joi");
 const joi = require("joi");
+const c = require("./common");
 
-const read = {
-  params: joi.object().keys({
-    id: joi.number().required(),
-  }),
-};
-const create = {
-  body: joi.object().keys({
-    title: joi
-      .string()
-      .regex(/^[a-zA-Z0-9- - ]{5,16}$/)
-      .required(),
-    startTime: joi.date().optional(),
-    endTime: joi.date().optional(),
-    mentorId: joi.number().required(),
-    courseId: joi.number().required(),
-    capacity: joi.number().required(),
-    isLocked: joi.bool().optional(),
-  }),
+const fields = {
+  title: c.title,
+  startTime: joi.date().iso(),
+  endTime: joi.date().iso(),
+  mentorId: c.id,
+  courseId: c.id,
+  capacity: joi.number().integer().min(0),
+  isLocked: joi.bool(),
 };
 
-const update = {
-  params: joi.object().keys({
-    id: joi.number().required(),
-  }),
-  body: joi.object().keys({
-    title: joi
-      .string()
-      .regex(/^[a-zA-Z0-9- ]{5,16}$/)
-      .optional(),
-    startTime: joi.date().optional(),
-    endTime: joi.date().optional(),
-    mentorId: joi.number().optional(),
-    courseId: joi.number().optional(),
-    capacity: joi.number().optional(),
-    isLocked: joi.bool().optional(),
-  }),
-};
-const lock = {
-  params: joi.object().keys({
-    id: joi.number().required(),
-  }),
-  body: joi.object().keys({
-    lockStatus: joi.bool().required(),
-  }),
-};
 module.exports = {
-  read,
-  create,
-  update,
-  lock,
+  read: { params: c.idParams },
+  create: {
+    body: joi
+      .object()
+      .keys({
+        ...fields,
+        title: fields.title.required(),
+        mentorId: fields.mentorId.required(),
+        courseId: fields.courseId.required(),
+        capacity: fields.capacity.required(),
+      })
+      .custom((value, helpers) =>
+        value.startTime && value.endTime && value.endTime <= value.startTime
+          ? helpers.message("endTime must be after startTime")
+          : value
+      ),
+  },
+  update: { params: c.idParams, body: joi.object().keys(fields).min(1) },
+  lock: { params: c.idParams, body: joi.object().keys({ lockStatus: joi.bool().required() }) },
+  remove: { params: c.idParams },
 };

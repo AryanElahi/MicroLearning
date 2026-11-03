@@ -1,209 +1,147 @@
-/* eslint-disable linebreak-style */
-/* eslint-disable no-use-before-define */
-const { ApiError } = require("../api/middlewares/errorHandling.middleware");
+const prisma = require("../lib/prisma");
+const { hashPassword, verifyPassword } = require("../utils/password");
+const ApiError = require("../utils/ApiError");
+const tokenService = require("./token.services");
+const otpService = require("./otp.services");
 
-const { PrismaClient } = require("@prisma/client");
-const bcrypt = require("bcrypt");
-const jwt = require("jsonwebtoken");
-const { CheckIfCorrect, generateNewCodeForThisNumber } = require("./sms");
-require("dotenv").config();
-const lodash = require("lodash");
+const INVALID_CREDENTIALS = "The phone number or password is incorrect";
+const INVALID_CODE = "Access denied: the verification code is not correct";
+const BLOCKED = "Access denied: this user is blocked";
 
-const prisma = new PrismaClient();
+const getUserById = (id) => prisma.user.findUnique({ where: { id } });
 
-const signup = async (phone) => {
-  const user = await getUserbyPhone(phone);
-  if (user) {
-    throw new ApiError(400, "This User Already Exists!");
-  }
-  await generateNewCodeForThisNumber(phone);
+const getUserByPhone = (phone) => prisma.user.findUnique({ where: { phone } });
+
+async function issueTokens(userId) {
+  const tokens = tokenService.generateTokens(userId, "user");
+  await prisma.user.update({
+    where: { id: userId },
+    data: { refreshToken: tokenService.hashToken(tokens.refreshToken) },
+  });
+  return tokens;
+}
+
+const assertActive = (user) => {
+  if (user && user.blocked) throw ApiError.forbidden(BLOCKED);
 };
 
-const verify = async (phone, code, password) => {
-  console.log(code);
-  if (await CheckIfCorrect(code, phone)) {
-    return createUser(phone, password);
+/** Step 1 of sign-up: send an OTP to a phone that is not registered yet. */
+async function signup(phone) {
+  if (await getUserByPhone(phone)) {
+    throw ApiError.conflict("This user already exists");
   }
-  throw new ApiError(400, "access denied! code isn't correct");
-};
+  await otpService.sendCode(phone);
+}
 
-const login = async (phone, password) => {
-  const user = await getUserbyPhone(phone);
-  if (!user) {
-    throw new ApiError(400, "the password or username is incorrect");
+/** Step 2 of sign-up: verify the OTP and create the account. */
+async function verify(phone, code, password) {
+  if (!otpService.verifyCode(phone, code)) throw ApiError.badRequest(INVALID_CODE);
+  const user = await prisma.user.create({
+    data: { phone, password: await hashPassword(password) },
+  });
+  return issueTokens(user.id);
+}
+
+async function login(phone, password) {
+  const user = await getUserByPhone(phone);
+  const valid = await verifyPassword(password, user && user.password);
+  if (!user || !valid || user.softDelete) {
+    throw ApiError.badRequest(INVALID_CREDENTIALS);
   }
-  if (await bcrypt.compare(password, user.password))
-    return setRefereshToken(phone, password);
-  throw new ApiError(400, "the password or the username is incorrect");
-};
-async function getAllUsers(size, page) {
-  try {
-    console.log(size, page);
-    const users = await prisma.user.findMany({
+  assertActive(user);
+  return issueTokens(user.id);
+}
+
+async function refresh(refreshToken) {
+  const { id } = tokenService.verifyRefreshToken(refreshToken, "user");
+  const user = await getUserById(id);
+  if (!user || user.softDelete || user.refreshToken !== tokenService.hashToken(refreshToken)) {
+    throw ApiError.unauthorized("Access denied: refresh token is not valid");
+  }
+  assertActive(user);
+  return issueTokens(user.id);
+}
+
+async function logout(id) {
+  await prisma.user.update({ where: { id }, data: { refreshToken: "" } });
+}
+
+async function forgetPassword(phone) {
+  const user = await getUserByPhone(phone);
+  // Do not reveal whether the number is registered.
+  if (!user || user.softDelete) return;
+  assertActive(user);
+  await otpService.sendCode(phone);
+}
+
+async function verifyForgetPassword(phone, code, password) {
+  const user = await getUserByPhone(phone);
+  if (!user || !otpService.verifyCode(phone, code)) {
+    throw ApiError.badRequest(INVALID_CODE);
+  }
+  assertActive(user);
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { password: await hashPassword(password) },
+  });
+  return issueTokens(user.id);
+}
+
+async function getAllUsers({ page = 1, size = 20 } = {}) {
+  const where = { softDelete: false };
+  const [items, total] = await prisma.$transaction([
+    prisma.user.findMany({
+      where,
       skip: size * (page - 1),
-      take: size * 1,
-    });
-    console.log(users);
-    return users;
-  } catch (error) {
-    console.log("errrror", error);
-    return error;
-  }
-}
-async function checkRefreshToken(receivedRefreshToken) {
-  const userId = await jwt.verify(
-    receivedRefreshToken,
-    process.env.REFRESHTOKEN_SECRET
-  ).id;
-  const user = await getUserbyId(userId);
-  if (receivedRefreshToken === user.refreshToken) return userId;
+      take: size,
+      orderBy: { id: "asc" },
+    }),
+    prisma.user.count({ where }),
+  ]);
+  return { items, total, page, size };
 }
 
-const refreshToken = async (id) => {
-  const user = await getUserbyId(id);
-  return setRefereshToken(user.phone);
-};
-
-const logout = async (id) => {
-  try {
-    const user = await getUserbyId(id);
-    user.refreshToken = "";
-    await updateUser(user);
-    return true;
-  } catch (error) {
-    throw new ApiError(400, "User not found");
+async function createUser({ password, ...data }) {
+  if (await getUserByPhone(data.phone)) {
+    throw ApiError.conflict("This user already exists");
   }
-};
-
-const forgetPassword = async (phone) => {
-  await generateNewCodeForThisNumber(phone);
-  return;
-};
-
-const verifyForgetPassword = async (phone, code, password) => {
-  const user = await getUserbyPhone(phone);
-  if (await CheckIfCorrect(code, phone)) {
-    const hashedPaassword = await bcrypt.hash(password, 10);
-    user.password = hashedPaassword;
-    if (await updateUser(user)) await setRefereshToken(user.phone);
-  } else {
-    throw new ApiError(400, "access denied! code isn't correct");
-  }
-};
-
-async function getUserbyId(objectId) {
-  return prisma.User.findUnique({
-    where: {
-      id: objectId,
-    },
+  return prisma.user.create({
+    data: { ...data, password: await hashPassword(password) },
   });
 }
 
-async function getUserbyPhone(phone) {
-  try {
-    return prisma.User.findUnique({
-      where: {
-        phone,
-      },
-    });
-  } catch (error) {
-    throw new ApiError(400, "User not found");
-  }
-}
-
-async function setRefereshToken(phone) {
-  const user = await getUserbyPhone(phone);
-  const refreshtoken = jwt.sign(
-    { id: user.id },
-    process.env.REFRESHTOKEN_SECRET,
-    { expiresIn: 3600000 * 1000 }
-  );
-  const accesstoken = await jwt.sign(
-    { id: user.id },
-    process.env.ACCESSTOKEN_SECRET,
-    { expiresIn: 3600000 }
-  );
-  user.refreshToken = refreshtoken;
-  if (await updateUser(user)) {
-    return { accesstoken, refreshtoken };
-  }
-}
-
-async function createUser(phone, password) {
-  const hashedPassword = await bcrypt.hash(password, 10);
-  await prisma.User.create({
-    data: {
-      phone,
-      password: hashedPassword,
-    },
-  });
-  return setRefereshToken(phone);
-}
-
-async function updateUser(obj) {
-  try {
-    const { phone } = obj;
-    console.log(obj);
-    if (await getUserbyPhone(phone)) {
-      // eslint-disable-next-line no-param-reassign
-      delete obj.id;
-      const user = await prisma.User.update({
-        where: { phone },
-        data: obj,
-      });
-      return omit(user);
-    } else {
-      throw new ApiError(400, "User not found");
-    }
-  } catch (error) {
-    throw new ApiError(error.statusCode, error.message);
-  }
+async function updateUser(phone, changes) {
+  const data = { ...changes };
+  if (data.password) data.password = await hashPassword(data.password);
+  if (data.blocked === true) data.refreshToken = ""; // kick blocked users out
+  return prisma.user.update({ where: { phone }, data });
 }
 
 async function deleteUser(phone) {
-  try {
-    const deletedPhone = `D-${phone}`;
-    await prisma.User.update({
-      where: { phone },
-      data: {
-        phone: deletedPhone,
-        softDelete: true,
-      },
-    });
-    return true;
-  } catch (error) {
-    throw new ApiError(400, "error while deleting");
-  }
+  const user = await getUserByPhone(phone);
+  if (!user) throw ApiError.notFound("User not found");
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      phone: `deleted-${user.id}-${Date.now()}-${user.phone}`,
+      softDelete: true,
+      refreshToken: "",
+    },
+  });
 }
-function omit(object) {
-  if (Array.isArray(object)) {
-    console.log("aray");
-    return object.map((item) => omit(item));
-  } else {
-    console.log("non arary");
-    return lodash.omit(object, ["password", "refreshToken"]);
-  }
-}
-async function checkIfBlocked(phone) {
-  const user = await getUserbyPhone(phone);
-  return user.blocked;
-}
+
 module.exports = {
   signup,
   verify,
   login,
-  refreshToken,
+  refresh,
+  logout,
   forgetPassword,
   verifyForgetPassword,
-  logout,
-  updateUser,
-  getUserbyId,
+  getUserById,
+  getUserByPhone,
   getAllUsers,
-  getUserbyPhone,
-  setRefereshToken,
   createUser,
+  updateUser,
   deleteUser,
-  checkRefreshToken,
-  omit,
-  checkIfBlocked,
 };

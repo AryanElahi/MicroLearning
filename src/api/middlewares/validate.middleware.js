@@ -1,28 +1,45 @@
-const Joi = require('joi');
-const { ApiError } = require('./errorHandling.middleware');
+const Joi = require("joi");
+const ApiError = require("../../utils/ApiError");
 
-const pick = (object, keys) => keys.reduce((obj, key) => {
-  if (object && Object.prototype.hasOwnProperty.call(object, key)) {
-    // eslint-disable-next-line no-param-reassign
-    obj[key] = object[key];
-  }
-  return obj;
-}, {});
-const validate = (schema) => (req, res, next) => {
-  const validSchema = pick(schema, ['params', 'query', 'body']);
-  const object = pick(req, Object.keys(validSchema));
-  const { value, error } = Joi.compile(validSchema)
-    .prefs({ errors: { label: 'key' }, abortEarly: false })
-    .validate(object);
+const pick = (object, keys) =>
+  keys.reduce((result, key) => {
+    if (object && Object.prototype.hasOwnProperty.call(object, key)) {
+      result[key] = object[key];
+    }
+    return result;
+  }, {});
 
-  if (error) {
-    const errorMessage = error.details
-      .map((details) => details.message)
-      .join(', ');
-      const err = new ApiError(400,errorMessage)
-    return next(err);
-  }
-  Object.assign(req, value);
-  return next();
+/**
+ * Validates (and coerces) `req.params`, `req.query` and `req.body`
+ * against the given Joi schema map.
+ */
+const validate = (schema) => {
+  const validSchema = pick(schema, ["params", "query", "body"]);
+  const compiled = Joi.compile(validSchema).prefs({
+    errors: { label: "key" },
+    abortEarly: false,
+  });
+
+  return (req, res, next) => {
+    const object = pick(req, Object.keys(validSchema));
+    const { value, error } = compiled.validate(object);
+
+    if (error) {
+      const message = error.details.map((detail) => detail.message).join(", ");
+      return next(ApiError.badRequest(message));
+    }
+
+    Object.keys(value).forEach((key) => {
+      if (key === "query") {
+        // req.query is a getter in newer Express versions; mutate in place.
+        Object.keys(req.query).forEach((k) => delete req.query[k]);
+        Object.assign(req.query, value.query);
+      } else {
+        req[key] = value[key];
+      }
+    });
+    return next();
+  };
 };
+
 module.exports = validate;
